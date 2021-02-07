@@ -104,7 +104,7 @@ class Address(Serializable):
 
     @classmethod
     def empty(cls):
-        return cls(socket.AF_INET, '0.0.0.0', 0)
+        return cls(socket.AF_INET, '255.255.255.255', 0)
 
     @classmethod
     def unpack(cls, buff):
@@ -129,8 +129,7 @@ class Address(Serializable):
                    socket.inet_pton(socket.AF_INET, self.host) + \
                    pack_uint16(self.port)
         else:
-            return b'\x06' + \
-                   pack_uint16(socket.AF_INET6) + \
+            return b'\x06\x17\x00' + \
                    pack_uint16(self.port) + \
                    b'\x00\x00\x00\x00' + \
                    socket.inet_pton(socket.AF_INET6, self.host) + \

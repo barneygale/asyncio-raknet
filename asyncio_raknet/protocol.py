@@ -77,11 +77,7 @@ class Protocol(asyncio.DatagramProtocol):
         else:
             packet = packet_types[ident].unpack(buff)
 
-        if type(packet) is ConnectedPing:
-            receipt = ConnectedPong(packet.local_time, 0)
-            self.write(receipt)
-
-        elif type(packet) in (ACK, NACK):
+        if type(packet) in (ACK, NACK):
             # Find reliable indices from frame set indices
             reliable_indices = []
             for frame_set_index in packet.indices:

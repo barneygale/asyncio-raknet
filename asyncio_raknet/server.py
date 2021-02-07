@@ -74,56 +74,40 @@ class ServerTransport(asyncio.DatagramTransport):
         self.close()
 
 
-async def create_server(conn_callback, host, port, **kwargs):
-    local_addr = (host, port)
-    loop = asyncio.get_event_loop()
-    server = Server(conn_callback)
-    await loop.create_datagram_endpoint(lambda: server, local_addr=local_addr, **kwargs)
-    return server
-
-
 async def listen(host, port, status_callback, login_callback, **kwargs):
 
     async def handler(protocol):
-        packet = await protocol.read()
-        if type(packet) in (UnconnectedPing, UnconnectedPingOpenConnections):
-            status = await status_callback(protocol)
-            protocol.write(UnconnectedPong(
-                guid=protocol.guid,
-                remote_time=packet.local_time,
-                status=status))
-            protocol.tick()
-            protocol.transport.close()
-            return
-
-        assert type(packet) is OpenConnectionRequest1
-        protocol.mtu = packet.mtu
-        protocol.version = packet.version
-        protocol.write(OpenConnectionReply1(
-            guid=protocol.guid,
-            mtu=protocol.mtu,
-            security=False))
-
-        packet = await protocol.read()
-        assert type(packet) is OpenConnectionRequest2
-        protocol.mtu = packet.mtu
-        protocol.write(OpenConnectionReply2(
-            guid=protocol.guid,
-            mtu=protocol.mtu,
-            remote_address=protocol.remote_address,
-            encryption=False))
-
-        packet = await protocol.read()
-        assert type(packet) is ConnectionRequest
-        protocol.online = True
-        protocol.write(ConnectionRequestAccepted(
-            remote_time=packet.local_time,
-            local_time=0,
-            remote_address=protocol.remote_address,
-            internal_addresses=[Address.empty() for _ in range(10)],
-            system_idx=0))
+        while True:
+            packet = await protocol.read()
+            if type(packet) in (UnconnectedPing, UnconnectedPingOpenConnections):
+                status = await status_callback(protocol)
+                protocol.write(UnconnectedPong(
+                    guid=protocol.guid,
+                    remote_time=packet.local_time,
+                    status=status))
+            elif type(packet) is OpenConnectionRequest1:
+                protocol.mtu = packet.mtu
+                protocol.version = packet.version
+                protocol.write(OpenConnectionReply1(
+                    guid=protocol.guid,
+                    mtu=protocol.mtu,
+                    security=False))
+            elif type(packet) is OpenConnectionRequest2:
+                protocol.mtu = packet.mtu
+                protocol.write(OpenConnectionReply2(
+                    guid=protocol.guid,
+                    mtu=protocol.mtu,
+                    remote_address=protocol.remote_address,
+                    encryption=False))
+                protocol.tick()
+                protocol.online = True
+                break
+            else:
+                raise ValueError(packet)
 
         await login_callback(protocol)
 
-    server = await create_server(handler, host, port, **kwargs)
+    loop = asyncio.get_event_loop()
+    server = Server(handler)
+    await loop.create_datagram_endpoint(lambda: server, local_addr=(host, port), **kwargs)
     return server
